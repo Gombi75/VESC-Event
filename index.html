@@ -14,13 +14,14 @@
     --swim:#2f7fd8; --swim-bg:#e5f0fc;
     --other:#7b8290; --other-bg:#eef0f3;
     --race:#d63c3c; --race-bg:#fde8e8;
+    --social:#8b5cf6; --social-bg:#f1ebfe;
     --accent:#1b1f24; --today:#1b1f24;
     --radius:12px;
   }
   @media (prefers-color-scheme: dark){
     :root{
       --bg:#121417; --panel:#1b1e23; --ink:#eceef1; --muted:#9aa1ab; --line:#2b3037; --soft:#22262c;
-      --run-bg:#3a2717; --bike-bg:#17321f; --swim-bg:#172a42; --other-bg:#2a2e34; --race-bg:#3d1d1d;
+      --run-bg:#3a2717; --bike-bg:#17321f; --swim-bg:#172a42; --other-bg:#2a2e34; --race-bg:#3d1d1d; --social-bg:#2c2242;
       --accent:#eceef1; --today:#eceef1;
     }
   }
@@ -107,6 +108,11 @@
   .choice .ce{font-size:24px}
   .choice .ct{font-weight:700;font-size:15px}
   .choice .cs{font-size:12px;color:var(--muted)}
+  .choice.social{border-color:var(--social);background:var(--social-bg)}
+  .chooser{grid-template-columns:repeat(3,1fr)}
+  @media (max-width:520px){ .chooser{grid-template-columns:1fr} .choice{flex-direction:row;justify-content:flex-start;text-align:left;padding:12px 14px;gap:12px} .choice .cs{display:none} }
+  .btn-social{background:var(--social-bg);color:var(--ink);border:1.5px solid var(--social);border-radius:10px;padding:9px 14px;font-weight:600;width:100%;margin-top:-12px}
+  .btn-social:hover{filter:brightness(.97)}
   .linkprev{display:block;margin-top:6px;font-size:12.5px;color:var(--swim);word-break:break-all}
   .repeat{background:var(--soft);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:8px}
   .chk{display:flex;gap:8px;align-items:center;font-size:13.5px;cursor:pointer}
@@ -194,6 +200,7 @@
       Új közös edzés
     </button>
     <button class="btn-secondary" id="addRaceBtn">🏆 Új verseny</button>
+    <button class="btn-social" id="addSocialBtn">🎉 Új közösségi program</button>
     <div>
       <p class="section-title">Sportágak</p>
       <div class="filters" id="filters"></div>
@@ -243,6 +250,7 @@ const SPORTS = {
   swim:  { name:"Úszás",            emoji:"🏊‍♂️", c:"var(--swim)",  bg:"var(--swim-bg)" },
   other: { name:"Erőnlét / Egyéb",  emoji:"🏋️‍♂️", c:"var(--other)", bg:"var(--other-bg)" },
   race:  { name:"Versenyek",        emoji:"🏆", c:"var(--race)",  bg:"var(--race-bg)", short:"Verseny" },
+  social:{ name:"Közösségi programok", emoji:"🎉", c:"var(--social)", bg:"var(--social-bg)", short:"Program" },
 };
 const RACE_TYPES = {
   tri:   { name:"Triatlon",        short:"Triatlon", emoji:"🏊‍♂️" },
@@ -261,8 +269,8 @@ state.cursor.setDate(1);
 
 function store(k, v){ try{ if(v===undefined) return localStorage.getItem(k); localStorage.setItem(k, v); }catch(e){ return null; } }
 function loadFilters(){
-  try{ const v = JSON.parse(store("vesc-filters")||"null"); if(v && typeof v==="object") return Object.assign({run:true,bike:true,swim:true,other:true,race:true}, v); }catch(e){}
-  return {run:true,bike:true,swim:true,other:true,race:true};
+  try{ const v = JSON.parse(store("vesc-filters")||"null"); if(v && typeof v==="object") return Object.assign({run:true,bike:true,swim:true,other:true,race:true,social:true}, v); }catch(e){}
+  return {run:true,bike:true,swim:true,other:true,race:true,social:true};
 }
 function saveFilters(){ store("vesc-filters", JSON.stringify(state.enabled)); }
 function loadName(){ return (store("vesc-name")||"").trim(); }
@@ -331,7 +339,7 @@ function renderMe(){
 }
 function renderFilters(){
   const box=document.getElementById("filters"); box.textContent="";
-  const counts={run:0,bike:0,swim:0,other:0,race:0};
+  const counts={run:0,bike:0,swim:0,other:0,race:0,social:0};
   const t=todayStr();
   state.events.forEach(e=>{ if(e.date>=t) counts[sportOf(e)]++; });
   for(const [k,s] of Object.entries(SPORTS)){
@@ -536,8 +544,9 @@ function openDay(key){
       el("div",{class:"info"},el("div",{class:"t"},e.title||s.name),el("div",{class:"m"},[e.start,e.place].filter(Boolean).join(" · ")))));
   });
   openModal(fmtDayLong(key), el("div",{},wrap, el("footer",{},
-    el("button",{class:"btn",onclick:()=>newRace(key)},"🏆 Új verseny"),
-    el("button",{class:"btn dark",onclick:()=>openForm(null,key)},"+ Új közös edzés"))));
+    el("button",{class:"btn",onclick:()=>newSocial(key)},"🎉 Program"),
+    el("button",{class:"btn",onclick:()=>newRace(key)},"🏆 Verseny"),
+    el("button",{class:"btn dark",onclick:()=>openForm(null,key)},"+ Edzés"))));
 }
 
 /** Napra kattintáskor: mit szeretnél rögzíteni? */
@@ -549,9 +558,15 @@ function openChooser(key){
         el("button",{class:"choice train",type:"button",onclick:()=>openForm(null,key)},
           el("span",{class:"ce"},"🏃‍♂️🚴‍♂️🏊‍♂️"), el("span",{class:"ct"},"Közös edzés"), el("span",{class:"cs"},"futás, kerékpár, úszás, erőnlét")),
         el("button",{class:"choice race",type:"button",onclick:()=>newRace(key)},
-          el("span",{class:"ce"},"🏆"), el("span",{class:"ct"},"Verseny"), el("span",{class:"cs"},"triatlon, duatlon, futó-, kerékpárverseny")))),
+          el("span",{class:"ce"},"🏆"), el("span",{class:"ct"},"Verseny"), el("span",{class:"cs"},"triatlon, duatlon, futó-, kerékpárverseny")),
+        el("button",{class:"choice social",type:"button",onclick:()=>newSocial(key)},
+          el("span",{class:"ce"},"🎉"), el("span",{class:"ct"},"Közösségi program"), el("span",{class:"cs"},"klubest, vacsora, túra, buli")))),
     el("footer",{},el("button",{class:"btn",type:"button",onclick:closeModal},"Mégse")));
   openModal(fmtDayLong(key), box);
+}
+function newSocial(key){
+  if(!state.enabled.social){ state.enabled.social=true; saveFilters(); renderAll(); }
+  openForm(null,key||null,"social");
 }
 function newRace(key){
   if(!state.enabled.race){ state.enabled.race=true; saveFilters(); renderAll(); }
@@ -571,7 +586,7 @@ function openDetail(id){
       e.place && el("div",{class:"line"},el("span",{class:"k"},"📍"),el("span",{},e.place)),
       e.distance && el("div",{class:"line"},el("span",{class:"k"},"📏"),el("span",{},e.distance)),
       e.link && el("div",{class:"line"},el("span",{class:"k"},"🔗"),el("a",{href:e.link,target:"_blank",rel:"noopener"},e.sport==="race"?"Verseny oldala / nevezés":e.link)),
-      e.seriesId && el("div",{class:"line"},el("span",{class:"k"},"🔁"),el("span",{},"Hetente ismétlődő edzés")),
+      e.seriesId && el("div",{class:"line"},el("span",{class:"k"},"🔁"),el("span",{},e.sport==="social"?"Hetente ismétlődő program":"Hetente ismétlődő edzés")),
       e.desc && el("div",{class:"desc"},e.desc),
       el("div",{class:"line"},el("span",{class:"k"},"👤"),el("span",{},"Szervező: "+(e.organizer||"–"))),
       el("div",{},
@@ -616,16 +631,18 @@ function openForm(existing, dateKey, presetSport){
   if(!existing && !state.me) return askName(()=>openForm(null,dateKey,presetSport));
   const e=existing||{sport:presetSport||firstEnabled(),date:dateKey||todayStr(),start:"",end:"",title:"",place:"",distance:"",desc:"",link:"",raceType:""};
   const isRace=sportOf(e)==="race";
+  const isSocial=sportOf(e)==="social";
+  const kindWord=isRace?"verseny":isSocial?"program":"edzés";
   const form=el("form",{});
   const f=(label,input)=>el("label",{class:"f"},label,input);
-  const iTitle=el("input",{maxlength:"80",value:e.title||"",placeholder:isRace?"Válassz a listából vagy írd be a verseny nevét":"pl. Hosszú futás a Csatár-hegyen"});
+  const iTitle=el("input",{maxlength:"80",value:e.title||"",placeholder:isRace?"Válassz a listából vagy írd be a verseny nevét":isSocial?"pl. Évzáró vacsora, klubest, közös túra":"pl. Hosszú futás a Csatár-hegyen"});
   const iDate=el("input",{type:"date",required:true,value:e.date});
   const iStart=el("input",{type:"time",value:e.start||""});
   const iEnd=el("input",{type:"time",value:e.end||""});
-  const iPlace=el("input",{maxlength:"100",placeholder:isRace?"pl. Keszthely":"pl. Kittenberger, Sportuszoda",value:e.place||""});
+  const iPlace=el("input",{maxlength:"100",placeholder:isRace?"pl. Keszthely":isSocial?"pl. étterem, klubhelyiség":"pl. Kittenberger, Sportuszoda",value:e.place||""});
   const iDist=el("input",{maxlength:"60",placeholder:isRace?"pl. 1,9 / 90 / 21,1 km":"pl. 15 km, laza tempó",value:e.distance||""});
-  const iDesc=el("textarea",{maxlength:"1000",placeholder:isRace?"Ki indul, közös utazás, szállás…":"Tempó, gyülekező, mit hozz magaddal…"}); iDesc.value=e.desc||"";
-  const iLink=el("input",{type:"url",maxlength:"300",placeholder:"https://… (nevezés, versenykiírás)",value:e.link||""});
+  const iDesc=el("textarea",{maxlength:"1000",placeholder:isRace?"Ki indul, közös utazás, szállás…":isSocial?"Program, költség, mit hozz magaddal…":"Tempó, gyülekező, mit hozz magaddal…"}); iDesc.value=e.desc||"";
+  const iLink=el("input",{type:"url",maxlength:"300",placeholder:isSocial?"https://… (pl. étterem, esemény oldala)":"https://… (nevezés, versenykiírás)",value:e.link||""});
   const linkPreview=el("a",{target:"_blank",rel:"noopener",class:"linkprev"});
   function updateLinkPreview(){
     const v=iLink.value.trim();
@@ -643,9 +660,9 @@ function openForm(existing, dateKey, presetSport){
       if(cur===k) inp.checked=true;
       pick.append(el("div",{style:`--c:var(--race);--bg-c:var(--race-bg)`},inp,el("label",{for:"rt-"+k},el("span",{class:"e"},t.emoji),t.short)));
     }
-  } else {
+  } else if(!isSocial) {
     for(const [k,s] of Object.entries(SPORTS)){
-      if(k==="race") continue;
+      if(k==="race"||k==="social") continue;
       const inp=el("input",{type:"radio",name:"sport",id:"sp-"+k,value:k});
       if(sportOf(e)===k) inp.checked=true;
       pick.append(el("div",{style:`--c:${s.c};--bg-c:${s.bg}`},inp,el("label",{for:"sp-"+k},el("span",{class:"e"},s.emoji),s.short||s.name.split(" ")[0])));
@@ -690,7 +707,7 @@ function openForm(existing, dateKey, presetSport){
   const repField=(!existing && !isRace) ? el("div",{class:"repeat"},el("label",{class:"chk"},iRep,"🔁 Hetente ismétlődik"),untilWrap) : null;
   let scope="one";
   const scopeField = existing && existing.seriesId ? el("div",{class:"repeat"},
-    el("p",{class:"section-title",style:"margin:0 0 4px"},"Ismétlődő edzés"),
+    el("p",{class:"section-title",style:"margin:0 0 4px"},isSocial?"Ismétlődő program":"Ismétlődő edzés"),
     el("label",{class:"chk"},el("input",{type:"radio",name:"scope",value:"one",checked:true,onchange:()=>scope="one"}),"Csak ezt az alkalmat módosítom"),
     el("label",{class:"chk"},el("input",{type:"radio",name:"scope",value:"future",onchange:()=>scope="future"}),"Ezt és az összes következőt")) : null;
 
@@ -698,17 +715,17 @@ function openForm(existing, dateKey, presetSport){
   const save=el("button",{class:"btn dark",type:"submit"},existing?"Mentés":"Hozzáadás");
   form.append(
     el("div",{class:"body"},
-      el("div",{},el("p",{class:"section-title"},isRace?"Verseny típusa":"Sportág"),pick),
-      f(isRace?"Verseny neve":"Megnevezés",iTitle),
+      !isSocial && el("div",{},el("p",{class:"section-title"},isRace?"Verseny típusa":"Sportág"),pick),
+      f(isRace?"Verseny neve":isSocial?"Program neve":"Megnevezés",iTitle),
       el("div",{class:"row3"},f("Dátum",iDate),f(isRace?"Rajt":"Kezdés",iStart),f("Vége",iEnd)),
-      el("div",{class:"row"},f("Helyszín",iPlace),f(isRace?"Táv":"Táv / jelleg",iDist)),
-      (isRace||e.link) && el("div",{},f("Link",iLink),linkPreview), f(isRace?"Megjegyzés":"Leírás",iDesc), repField, scopeField, err),
+      isSocial ? f("Helyszín",iPlace) : el("div",{class:"row"},f("Helyszín",iPlace),f(isRace?"Táv":"Táv / jelleg",iDist)),
+      (isRace||isSocial||e.link) && el("div",{},f("Link",iLink),linkPreview), f(isRace?"Megjegyzés":"Leírás",iDesc), repField, scopeField, err),
     el("footer",{},el("button",{class:"btn",type:"button",onclick:()=>existing?openDetail(existing.id):closeModal()},"Mégse"),save));
   form.addEventListener("submit",async(ev)=>{
     ev.preventDefault();
-    const sport=isRace?"race":(form.querySelector('input[name=sport]:checked')?.value||"other");
+    const sport=isRace?"race":isSocial?"social":(form.querySelector('input[name=sport]:checked')?.value||"other");
     const raceType=isRace?(form.querySelector('input[name=raceType]:checked')?.value||"other"):"";
-    if(isRace && !iTitle.value.trim()){ err.textContent="Add meg a verseny nevét."; return; }
+    if((isRace||isSocial) && !iTitle.value.trim()){ err.textContent=isRace?"Add meg a verseny nevét.":"Add meg a program nevét."; return; }
     if(!iDate.value){ err.textContent="Add meg a dátumot."; return; }
     if(iStart.value && iEnd.value && iEnd.value<iStart.value){ err.textContent="A vége nem lehet a kezdés előtt."; return; }
     const repeating = !!repField && iRep.checked;
@@ -723,9 +740,9 @@ function openForm(existing, dateKey, presetSport){
     }catch(x){ err.textContent=msg(x); save.disabled=false; save.textContent=existing?"Mentés":"Hozzáadás"; }
   });
   updateLinkPreview();
-  openModal(existing?(isRace?"Verseny szerkesztése":"Edzés szerkesztése"):(isRace?"🏆 Új verseny":"Új közös edzés"), form);
+  openModal(existing?(isRace?"Verseny szerkesztése":isSocial?"Program szerkesztése":"Edzés szerkesztése"):(isRace?"🏆 Új verseny":isSocial?"🎉 Új közösségi program":"Új közös edzés"), form);
 }
-function firstEnabled(){ return Object.keys(SPORTS).find(k=>k!=="race"&&state.enabled[k])||"run"; }
+function firstEnabled(){ return Object.keys(SPORTS).find(k=>k!=="race"&&k!=="social"&&state.enabled[k])||"run"; }
 function msg(x){ const m=(x&&x.message)||""; return m && m.length<120 ? "Hiba: "+m.replace(/^Error:\s*/,"") : "Nem sikerült menteni, próbáld újra."; }
 function setStatus(t,warn){ const s=document.getElementById("status"); s.textContent=t; s.classList.toggle("warn",!!warn); }
 
@@ -739,6 +756,7 @@ document.getElementById("allOn").onclick=()=>{ for(const k in SPORTS) state.enab
 document.getElementById("allOff").onclick=()=>{ for(const k in SPORTS) state.enabled[k]=false; saveFilters(); renderAll(); };
 document.getElementById("addBtn").onclick=()=>openForm(null);
 document.getElementById("addRaceBtn").onclick=()=>newRace(null);
+document.getElementById("addSocialBtn").onclick=()=>newSocial(null);
 let rT; addEventListener("resize",()=>{ clearTimeout(rT); rT=setTimeout(()=>{ if(state.view==="month") renderMonth(); },150); });
 
 renderAll();
