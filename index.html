@@ -191,8 +191,8 @@
 <div class="app">
   <aside>
     <div class="brand">
-      <h1>VESC közös események</h1>
-      <p>Írd be, ha közös eseményt szervezel, és nézd meg, ki jön.</p>
+      <h1>VESC közös edzések</h1>
+      <p>Írd be, ha közös edzést szervezel, és nézd meg, ki jön.</p>
       <div class="me" id="me"></div>
     </div>
     <button class="btn-primary" id="addBtn">
@@ -299,6 +299,13 @@ function el(tag, attrs={}, ...kids){
 const sportOf = ev => SPORTS[ev.sport] ? ev.sport : "other";
 const visible = () => state.events.filter(e => /^\d{4}-\d{2}-\d{2}$/.test(e.date) && state.enabled[sportOf(e)]);
 const sortEv = (a,b) => (a.date+(a.start||"99:99")).localeCompare(b.date+(b.start||"99:99"));
+const lastDay = e => (e.endDate && e.endDate>e.date) ? e.endDate : e.date;
+function whenText(e, long){
+  const fd = long ? fmtDayLong : fmtDayShort;
+  const days = lastDay(e)!==e.date ? fd(e.date)+" – "+fd(lastDay(e)) : fd(e.date);
+  const time = e.start ? e.start+(e.end?"–"+e.end:"") : "egész nap";
+  return {days, time};
+}
 const iGo = e => !!state.me && (e.attendees||[]).some(n => n.toLowerCase()===state.me.toLowerCase());
 
 /* ---------- server calls ---------- */
@@ -341,7 +348,7 @@ function renderFilters(){
   const box=document.getElementById("filters"); box.textContent="";
   const counts={run:0,bike:0,swim:0,other:0,race:0,social:0};
   const t=todayStr();
-  state.events.forEach(e=>{ if(e.date>=t) counts[sportOf(e)]++; });
+  state.events.forEach(e=>{ if(lastDay(e)>=t) counts[sportOf(e)]++; });
   for(const [k,s] of Object.entries(SPORTS)){
     const id="f-"+k;
     const input=el("input",{type:"checkbox",id});
@@ -362,14 +369,14 @@ function renderUpcoming(){
   const box=document.getElementById("upcoming"); box.textContent="";
   if(!state.loaded){ box.append(el("div",{class:"empty"},"Betöltés…")); return; }
   const t=todayStr();
-  const list=visible().filter(e=>e.date>=t).sort(sortEv).slice(0,8);
+  const list=visible().filter(e=>lastDay(e)>=t).sort(sortEv).slice(0,8);
   if(!list.length){ box.append(el("div",{class:"empty"},"Nincs tervezett közös edzés a kiválasztott sportágakban.")); return; }
   list.forEach(e=>{
     const s=SPORTS[sportOf(e)];
     box.append(el("button",{class:"up",style:`--c:${s.c}`,onclick:()=>openDetail(e.id)},
       el("span",{class:"bar"}),
       el("div",{}, el("div",{class:"t"},s.emoji+" "+(e.title||s.name)),
-        el("div",{class:"m"},fmtDayShort(e.date)+(e.start?" · "+e.start:"")+(e.place?" · "+e.place:"")))));
+        el("div",{class:"m"},(lastDay(e)!==e.date?fmtDayShort(e.date)+" – "+fmtDayShort(lastDay(e)):fmtDayShort(e.date))+(e.start?" · "+e.start:"")+(e.place?" · "+e.place:"")))));
   });
 }
 
@@ -392,7 +399,10 @@ function renderMonth(){
   const last=new Date(first.getFullYear(),m+1,0);
   const totalCells=Math.ceil((offset+last.getDate())/7)*7;
   const byDay={};
-  visible().forEach(e=>{ (byDay[e.date] = byDay[e.date] || []).push(e); });
+  visible().forEach(e=>{
+    const end=lastDay(e); let d=e.date, n=0;
+    while(d<=end && n<62){ (byDay[d] = byDay[d] || []).push(e); const x=parseYmd(d); x.setDate(x.getDate()+1); d=ymd(x); n++; }
+  });
   const t=todayStr();
   const small = matchMedia("(max-width:860px)").matches;
   const maxShow = small ? 3 : 4;
@@ -416,7 +426,7 @@ function renderMonth(){
 function renderList(){
   const view=document.getElementById("view"); view.textContent="";
   const t=todayStr();
-  const list=visible().filter(e=>e.date>=t).sort(sortEv);
+  const list=visible().filter(e=>lastDay(e)>=t).sort(sortEv);
   const box=el("div",{class:"list"});
   if(!state.loaded) box.append(el("div",{class:"empty",style:"padding:16px 18px"},"Betöltés…"));
   else if(!list.length) box.append(el("div",{class:"empty",style:"padding:16px 18px"},"Nincs tervezett közös edzés a kiválasztott sportágakban. Kattints az „Új közös edzés” gombra!"));
@@ -428,7 +438,7 @@ function renderList(){
     box.append(el("button",{class:"list-ev",style:`--bg-c:${s.bg}`,onclick:()=>openDetail(e.id)},
       el("span",{class:"dot"},s.emoji),
       el("div",{class:"info"}, el("div",{class:"t"},e.title||s.name),
-        el("div",{class:"m"},[e.sport==="race"&&raceLabel(e), e.start&&(e.start+(e.end?"–"+e.end:"")), e.place, e.distance].filter(Boolean).join(" · ")||s.name)),
+        el("div",{class:"m"},[e.sport==="race"&&raceLabel(e), lastDay(e)!==e.date&&("eddig: "+fmtDayShort(lastDay(e))), e.start?(e.start+(e.end?"–"+e.end:"")):"egész nap", e.place, e.distance].filter(Boolean).join(" · ")||s.name)),
       el("span",{class:"who"}, n? `${n} jön` : "")));
   });
   view.append(box);
@@ -581,8 +591,8 @@ function openDetail(id){
   const box=el("div",{},
     el("div",{class:"detail",style:`--bg-c:${s.bg}`},
       el("span",{class:"tag"},s.emoji+" "+(e.sport==="race"?raceLabel(e):s.name)),
-      el("div",{class:"line"},el("span",{class:"k"},"📅"),el("span",{},fmtDayLong(e.date))),
-      e.start && el("div",{class:"line"},el("span",{class:"k"},"🕒"),el("span",{},e.start+(e.end?" – "+e.end:""))),
+      el("div",{class:"line"},el("span",{class:"k"},"📅"),el("span",{},whenText(e,true).days)),
+      el("div",{class:"line"},el("span",{class:"k"},"🕒"),el("span",{},e.start?(e.start+(e.end?" – "+e.end:"")+(lastDay(e)!==e.date?" (első nap kezdés, utolsó nap vége)":"")):(lastDay(e)!==e.date?"Egész napos, több napos esemény":"Egész nap"))),
       e.place && el("div",{class:"line"},el("span",{class:"k"},"📍"),el("span",{},e.place)),
       e.distance && el("div",{class:"line"},el("span",{class:"k"},"📏"),el("span",{},e.distance)),
       e.link && el("div",{class:"line"},el("span",{class:"k"},"🔗"),el("a",{href:e.link,target:"_blank",rel:"noopener"},e.sport==="race"?"Verseny oldala / nevezés":e.link)),
@@ -637,6 +647,10 @@ function openForm(existing, dateKey, presetSport){
   const f=(label,input)=>el("label",{class:"f"},label,input);
   const iTitle=el("input",{maxlength:"80",value:e.title||"",placeholder:isRace?"Válassz a listából vagy írd be a verseny nevét":isSocial?"pl. Évzáró vacsora, klubest, közös túra":"pl. Hosszú futás a Csatár-hegyen"});
   const iDate=el("input",{type:"date",required:true,value:e.date});
+  const iEndDate=el("input",{type:"date",value:(e.endDate&&e.endDate>e.date)?e.endDate:"",min:e.date});
+  iDate.addEventListener("change",()=>{ iEndDate.min=iDate.value; if(iEndDate.value && iEndDate.value<=iDate.value) iEndDate.value=""; });
+  const iAllDay=el("input",{type:"checkbox"});
+  if(existing && !e.start) iAllDay.checked=true;
   const iStart=el("input",{type:"time",value:e.start||""});
   const iEnd=el("input",{type:"time",value:e.end||""});
   const iPlace=el("input",{maxlength:"100",placeholder:isRace?"pl. Keszthely":isSocial?"pl. étterem, klubhelyiség":"pl. Kittenberger, Sportuszoda",value:e.place||""});
@@ -713,11 +727,16 @@ function openForm(existing, dateKey, presetSport){
 
   const err=el("div",{class:"err"});
   const save=el("button",{class:"btn dark",type:"submit"},existing?"Mentés":"Hozzáadás");
+  const timeRow=el("div",{class:"row"},f(isRace?"Rajt":"Kezdés",iStart),f("Vége",iEnd));
+  const syncAllDay=()=>{ timeRow.style.display=iAllDay.checked?"none":""; };
+  iAllDay.addEventListener("change",syncAllDay); syncAllDay();
   form.append(
     el("div",{class:"body"},
       !isSocial && el("div",{},el("p",{class:"section-title"},isRace?"Verseny típusa":"Sportág"),pick),
       f(isRace?"Verseny neve":isSocial?"Program neve":"Megnevezés",iTitle),
-      el("div",{class:"row3"},f("Dátum",iDate),f(isRace?"Rajt":"Kezdés",iStart),f("Vége",iEnd)),
+      el("div",{class:"row"},f(isRace?"Dátum (első nap)":"Dátum (első nap)",iDate),f("Utolsó nap (ha több napos)",iEndDate)),
+      el("label",{class:"chk"},iAllDay,"Egész nap (nincs pontos időpont)"),
+      timeRow,
       isSocial ? f("Helyszín",iPlace) : el("div",{class:"row"},f("Helyszín",iPlace),f(isRace?"Táv":"Táv / jelleg",iDist)),
       (isRace||isSocial||e.link) && el("div",{},f("Link",iLink),linkPreview), f(isRace?"Megjegyzés":"Leírás",iDesc), repField, scopeField, err),
     el("footer",{},el("button",{class:"btn",type:"button",onclick:()=>existing?openDetail(existing.id):closeModal()},"Mégse"),save));
@@ -727,10 +746,13 @@ function openForm(existing, dateKey, presetSport){
     const raceType=isRace?(form.querySelector('input[name=raceType]:checked')?.value||"other"):"";
     if((isRace||isSocial) && !iTitle.value.trim()){ err.textContent=isRace?"Add meg a verseny nevét.":"Add meg a program nevét."; return; }
     if(!iDate.value){ err.textContent="Add meg a dátumot."; return; }
-    if(iStart.value && iEnd.value && iEnd.value<iStart.value){ err.textContent="A vége nem lehet a kezdés előtt."; return; }
+    const allDay=iAllDay.checked;
+    const endDate=(iEndDate.value && iEndDate.value>iDate.value)?iEndDate.value:"";
+    if(iEndDate.value && iEndDate.value<iDate.value){ err.textContent="Az utolsó nap nem lehet az első nap előtt."; return; }
+    if(!allDay && !endDate && iStart.value && iEnd.value && iEnd.value<iStart.value){ err.textContent="A vége nem lehet a kezdés előtt."; return; }
     const repeating = !!repField && iRep.checked;
     if(repeating && (!iUntil.value || iUntil.value<=iDate.value)){ err.textContent="Az utolsó alkalom legyen későbbi, mint az első."; return; }
-    const data={id:existing?existing.id:"",sport,raceType,title:iTitle.value.trim(),date:iDate.value,start:iStart.value,end:iEnd.value,
+    const data={id:existing?existing.id:"",sport,raceType,title:iTitle.value.trim(),date:iDate.value,endDate,start:allDay?"":iStart.value,end:allDay?"":iEnd.value,
       place:iPlace.value.trim(),distance:iDist.value.trim(),desc:iDesc.value.trim(),link:iLink.value.trim(),organizer:state.me};
     save.disabled=true; save.textContent="Mentés…";
     try{
