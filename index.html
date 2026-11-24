@@ -651,6 +651,8 @@ function openForm(existing, dateKey, presetSport){
   const iTitle=el("input",{maxlength:"80",value:e.title||"",placeholder:isRace?"Válassz a listából vagy írd be a verseny nevét":isSocial?"pl. Évzáró vacsora, klubest, közös túra":"pl. Hosszú futás a Csatár-hegyen"});
   const iDate=el("input",{type:"date",required:true,value:e.date});
   const iEndDate=el("input",{type:"date",value:(e.endDate&&e.endDate>e.date)?e.endDate:"",min:e.date});
+  let pastConfirmed=false;
+  const pastBox=el("div",{class:"pastconfirm",style:"display:none"});
   iDate.addEventListener("change",()=>{ pastConfirmed=false; iEndDate.min=iDate.value; if(iEndDate.value && iEndDate.value<=iDate.value) iEndDate.value=""; });
   const iAllDay=el("input",{type:"checkbox"});
   if(existing && !e.start) iAllDay.checked=true;
@@ -743,8 +745,6 @@ function openForm(existing, dateKey, presetSport){
       isSocial ? f("Helyszín",iPlace) : el("div",{class:"row"},f("Helyszín",iPlace),f(isRace?"Táv":"Táv / jelleg",iDist)),
       (isRace||isSocial||e.link) && el("div",{},f("Link",iLink),linkPreview), f(isRace?"Megjegyzés":"Leírás",iDesc), repField, scopeField, pastBox, err),
     el("footer",{},el("button",{class:"btn",type:"button",onclick:()=>existing?openDetail(existing.id):closeModal()},"Mégse"),save));
-  let pastConfirmed=false;
-  const pastBox=el("div",{class:"pastconfirm",style:"display:none"});
   form.addEventListener("submit",async(ev)=>{
     ev.preventDefault();
     const sport=isRace?"race":isSocial?"social":(form.querySelector('input[name=sport]:checked')?.value||"other");
