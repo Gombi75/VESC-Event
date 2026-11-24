@@ -113,6 +113,9 @@
   @media (max-width:520px){ .chooser{grid-template-columns:1fr} .choice{flex-direction:row;justify-content:flex-start;text-align:left;padding:12px 14px;gap:12px} .choice .cs{display:none} }
   .btn-social{background:var(--social-bg);color:var(--ink);border:1.5px solid var(--social);border-radius:10px;padding:9px 14px;font-weight:600;width:100%;margin-top:-12px}
   .btn-social:hover{filter:brightness(.97)}
+  .pastconfirm{background:#fff4e0;border:1.5px solid #f28c28;border-radius:10px;padding:10px 12px;color:#1b1f24}
+  .pastconfirm p{margin:0 0 8px;font-weight:600;font-size:13.5px}
+  .pastbtns{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
   .linkprev{display:block;margin-top:6px;font-size:12.5px;color:var(--swim);word-break:break-all}
   .repeat{background:var(--soft);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:8px}
   .chk{display:flex;gap:8px;align-items:center;font-size:13.5px;cursor:pointer}
@@ -648,7 +651,7 @@ function openForm(existing, dateKey, presetSport){
   const iTitle=el("input",{maxlength:"80",value:e.title||"",placeholder:isRace?"Válassz a listából vagy írd be a verseny nevét":isSocial?"pl. Évzáró vacsora, klubest, közös túra":"pl. Hosszú futás a Csatár-hegyen"});
   const iDate=el("input",{type:"date",required:true,value:e.date});
   const iEndDate=el("input",{type:"date",value:(e.endDate&&e.endDate>e.date)?e.endDate:"",min:e.date});
-  iDate.addEventListener("change",()=>{ iEndDate.min=iDate.value; if(iEndDate.value && iEndDate.value<=iDate.value) iEndDate.value=""; });
+  iDate.addEventListener("change",()=>{ pastConfirmed=false; iEndDate.min=iDate.value; if(iEndDate.value && iEndDate.value<=iDate.value) iEndDate.value=""; });
   const iAllDay=el("input",{type:"checkbox"});
   if(existing && !e.start) iAllDay.checked=true;
   const iStart=el("input",{type:"time",value:e.start||""});
@@ -738,8 +741,10 @@ function openForm(existing, dateKey, presetSport){
       el("label",{class:"chk"},iAllDay,"Egész nap (nincs pontos időpont)"),
       timeRow,
       isSocial ? f("Helyszín",iPlace) : el("div",{class:"row"},f("Helyszín",iPlace),f(isRace?"Táv":"Táv / jelleg",iDist)),
-      (isRace||isSocial||e.link) && el("div",{},f("Link",iLink),linkPreview), f(isRace?"Megjegyzés":"Leírás",iDesc), repField, scopeField, err),
+      (isRace||isSocial||e.link) && el("div",{},f("Link",iLink),linkPreview), f(isRace?"Megjegyzés":"Leírás",iDesc), repField, scopeField, pastBox, err),
     el("footer",{},el("button",{class:"btn",type:"button",onclick:()=>existing?openDetail(existing.id):closeModal()},"Mégse"),save));
+  let pastConfirmed=false;
+  const pastBox=el("div",{class:"pastconfirm",style:"display:none"});
   form.addEventListener("submit",async(ev)=>{
     ev.preventDefault();
     const sport=isRace?"race":isSocial?"social":(form.querySelector('input[name=sport]:checked')?.value||"other");
@@ -752,6 +757,21 @@ function openForm(existing, dateKey, presetSport){
     if(!allDay && !endDate && iStart.value && iEnd.value && iEnd.value<iStart.value){ err.textContent="A vége nem lehet a kezdés előtt."; return; }
     const repeating = !!repField && iRep.checked;
     if(repeating && (!iUntil.value || iUntil.value<=iDate.value)){ err.textContent="Az utolsó alkalom legyen későbbi, mint az első."; return; }
+    // múltbéli időpont megerősítése (új eseménynél, vagy ha a dátumot múltba tették)
+    const inPast = iDate.value < todayStr();
+    const dateChanged = !existing || existing.date !== iDate.value;
+    if(inPast && dateChanged && !pastConfirmed){
+      err.textContent="";
+      pastBox.textContent="";
+      pastBox.append(
+        el("p",{},"⚠️ Biztosan egy múltbéli időpontra szeretnéd rögzíteni? ("+fmtDayLong(iDate.value)+")"),
+        el("div",{class:"pastbtns"},
+          el("button",{class:"btn",type:"button",onclick:()=>{ pastBox.style.display="none"; iDate.focus(); }},"Nem, módosítom"),
+          el("button",{class:"btn dark",type:"button",onclick:()=>{ pastConfirmed=true; pastBox.style.display="none"; save.click(); }},"Igen, rögzítem")));
+      pastBox.style.display="";
+      pastBox.scrollIntoView({block:"nearest"});
+      return;
+    }
     const data={id:existing?existing.id:"",sport,raceType,title:iTitle.value.trim(),date:iDate.value,endDate,start:allDay?"":iStart.value,end:allDay?"":iEnd.value,
       place:iPlace.value.trim(),distance:iDist.value.trim(),desc:iDesc.value.trim(),link:iLink.value.trim(),organizer:state.me};
     save.disabled=true; save.textContent="Mentés…";
